@@ -8,6 +8,16 @@ A lightweight, web-based print management dashboard for Linux. Built on top of C
 
 ---
 
+## 💡 The Origin Story: Why I Built This
+
+I built **PrintStation** out of necessity while preparing to print chapters of my **graduation manuscript/thesis**. 
+
+Midway through writing, my laptop's GPU suffered hardware damage (RAM artifacting), forcing me to switch over to a Linux environment. While Linux was great for performance, managing high-volume document printing and fine-tuning print settings (reverse page collating, multi-copy batches, ink status checks, and image-to-PDF formatting) through standard dialogs and stock CUPS interfaces felt clunky and frustrating during crunch time.
+
+Rather than fighting with standard print options, I decided to engineer my own web-based solution to streamline the entire workflow directly from the browser.
+
+---
+
 ## ✨ Features
 
 - 📂 **Browse local folders** for PDF and image files (JPG, PNG, WebP, BMP)
