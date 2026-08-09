@@ -5,14 +5,17 @@ Handles:
   - File validation (PDF page count, image verify)
   - Image-to-PDF conversion with fit/fill/natural modes, filters, and auto-rotation
   - PDF page reversal for back-to-front collation
+  - Combined multi-file PDF building using tempfile (no hardcoded /tmp paths)
 """
 
 import os
-import time
+import tempfile
 from pathlib import Path
 
 from pypdf import PdfReader, PdfWriter
 from PIL import Image, ImageOps, ImageEnhance
+
+from config import log
 
 # ── Supported file extensions ──────────────────────────────────
 IMAGE_EXTS = frozenset(("jpg", "jpeg", "png", "webp", "bmp"))
@@ -31,15 +34,8 @@ MARGIN_PX: dict[str, int] = {
     "medium": 56,   # ~20 mm
 }
 
-# ── Display colour overrides for CUPS ink markers ──────────────
-INK_DISPLAY_COLORS: dict[str, str] = {
-    "#000000": "#555",
-    "#00FFFF": "#00d4ff",
-    "#FF00FF": "#ff69b4",
-    "#FFFF00": "#ffd93d",
-}
 
-
+# ── Helpers ────────────────────────────────────────────────────
 def get_file_ext(filepath: str) -> str:
     return Path(filepath).suffix.lstrip(".").lower()
 
@@ -51,15 +47,15 @@ def get_file_info(filepath: str) -> dict:
         try:
             r = PdfReader(filepath)
             return {"pages": len(r.pages), "valid": True, "type": "pdf"}
-        except Exception as e:
-            return {"pages": 0, "valid": False, "error": str(e), "type": "pdf"}
-    elif ext in IMAGE_EXTS:
+        except Exception as exc:
+            return {"pages": 0, "valid": False, "error": str(exc), "type": "pdf"}
+    if ext in IMAGE_EXTS:
         try:
             with Image.open(filepath) as img:
                 img.verify()
             return {"pages": 1, "valid": True, "type": "image"}
-        except Exception as e:
-            return {"pages": 0, "valid": False, "error": str(e), "type": "image"}
+        except Exception as exc:
+            return {"pages": 0, "valid": False, "error": str(exc), "type": "image"}
     return {"pages": 0, "valid": False, "error": "Unsupported file format", "type": "unknown"}
 
 
@@ -100,6 +96,7 @@ def _scale_image(
     return img
 
 
+# ── Image-to-PDF ───────────────────────────────────────────────
 def images_to_pdf(
     image_paths: list[str],
     output_path: str,
@@ -111,12 +108,11 @@ def images_to_pdf(
 ) -> int:
     """
     Convert a list of image files into a single multi-page PDF.
-
     Returns the number of pages written.
     Raises ValueError if no images could be processed.
     """
     pw, ph = PAGE_SIZES.get(media, PAGE_SIZES["A4"])
-    margin_px = MARGIN_PX.get(margin, MARGIN_PX["small"])
+    margin_px   = MARGIN_PX.get(margin, MARGIN_PX["small"])
     printable_w = pw - 2 * margin_px
     printable_h = ph - 2 * margin_px
 
@@ -127,37 +123,26 @@ def images_to_pdf(
             if img.mode != "RGB":
                 img = img.convert("RGB")
             img = _apply_filter(img, filter_type)
-
             if auto_rotate:
-                page_portrait = ph > pw
-                img_portrait  = img.height > img.width
-                if page_portrait != img_portrait:
+                if (ph > pw) != (img.height > img.width):
                     img = img.rotate(90, expand=True)
-
             scaled = _scale_image(img, printable_w, printable_h, fit)
             canvas = Image.new("RGB", (int(pw), int(ph)), "white")
-            paste_x = (int(pw) - scaled.width)  // 2
-            paste_y = (int(ph) - scaled.height) // 2
-            canvas.paste(scaled, (paste_x, paste_y))
+            canvas.paste(scaled, ((int(pw) - scaled.width) // 2, (int(ph) - scaled.height) // 2))
             pages.append(canvas)
         except Exception as exc:
-            print(f"[pdf_service] Skipping {path}: {exc}")
+            log.warning(f"Skipping image {path}: {exc}")
 
     if not pages:
         raise ValueError("No valid images could be processed.")
 
-    pages[0].save(
-        output_path, "PDF", resolution=72.0,
-        save_all=True, append_images=pages[1:],
-    )
+    pages[0].save(output_path, "PDF", resolution=72.0, save_all=True, append_images=pages[1:])
     return len(pages)
 
 
+# ── Page reversal ──────────────────────────────────────────────
 def reverse_pages(filepath: str, start: int, end: int, out_path: str) -> str:
-    """
-    Write pages [start..end] in reverse order to out_path.
-    Returns out_path.
-    """
+    """Write pages [start..end] in reverse order to out_path. Returns out_path."""
     reader = PdfReader(filepath)
     writer = PdfWriter()
     for i in reversed(range(start - 1, end)):
@@ -167,6 +152,7 @@ def reverse_pages(filepath: str, start: int, end: int, out_path: str) -> str:
     return out_path
 
 
+# ── Combined PDF builder ───────────────────────────────────────
 def build_combined_pdf(
     filepaths: list[str],
     media: str,
@@ -177,25 +163,26 @@ def build_combined_pdf(
 ) -> tuple[str, int]:
     """
     Merge a list of PDFs and/or images into a single combined PDF.
-
+    Uses tempfile for all intermediates — no hardcoded /tmp paths.
     Returns (combined_pdf_path, total_pages).
-    Cleans up any intermediate per-image temp files.
     """
-    writer      = PdfWriter()
-    temp_images: list[str] = []
+    writer     = PdfWriter()
+    img_temps: list[str] = []
 
     try:
-        ts = int(time.time())
-        for idx, path in enumerate(filepaths):
+        for path in filepaths:
             ext = get_file_ext(path)
             if ext in IMAGE_EXTS:
-                img_tmp = f"/tmp/printstation_img_{ts}_{idx}.pdf"
+                with tempfile.NamedTemporaryFile(
+                    suffix=".pdf", prefix="ps_img_", delete=False
+                ) as tf:
+                    img_tmp = tf.name
                 images_to_pdf(
                     [path], img_tmp,
                     media=media, fit=fit, margin=margin,
                     filter_type=filter_type, auto_rotate=auto_rotate,
                 )
-                temp_images.append(img_tmp)
+                img_temps.append(img_tmp)
                 for page in PdfReader(img_tmp).pages:
                     writer.add_page(page)
             elif ext == PDF_EXT:
@@ -204,13 +191,16 @@ def build_combined_pdf(
             else:
                 raise ValueError(f"Unsupported file type: .{ext}")
 
-        combined = f"/tmp/printstation_combined_{ts}.pdf"
+        with tempfile.NamedTemporaryFile(
+            suffix=".pdf", prefix="ps_combined_", delete=False
+        ) as tf:
+            combined = tf.name
         with open(combined, "wb") as f:
             writer.write(f)
         return combined, len(writer.pages)
 
     finally:
-        for f in temp_images:
+        for f in img_temps:
             try:
                 os.remove(f)
             except OSError:
