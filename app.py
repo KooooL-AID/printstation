@@ -26,22 +26,34 @@ def _start_queue_worker() -> None:
     log.info("Print queue worker thread started.")
 
 
+# ── Optional watchdog import ───────────────────────────────────
+try:
+    from watchdog.observers import Observer as _Observer
+    from watchdog.events import FileSystemEventHandler as _FileSystemEventHandler
+    _WATCHDOG_AVAILABLE = True
+except ImportError:
+    _WATCHDOG_AVAILABLE = False
+
+
 def _start_watchdog() -> None:
     """
     Start folder watchers for any configured watch_folders.
-    Requires the 'watchdog' package (pip install watchdog).
-    Silently skips if watchdog is not installed.
+    Requires the 'watchdog' package — silently skips if not installed.
     """
     watch_folders = settings.get("watch_folders", [])
     if not watch_folders:
         return
 
+    if not _WATCHDOG_AVAILABLE:
+        log.info("watchdog not installed — auto-print watch folders disabled. "
+                 "Install with: pip install watchdog")
+        return
+
     try:
-        from watchdog.observers import Observer
-        from watchdog.events import FileSystemEventHandler
+        import time
         from services.pdf_service import IMAGE_EXTS
 
-        class _AutoPrintHandler(FileSystemEventHandler):
+        class _AutoPrintHandler(_FileSystemEventHandler):
             def on_created(self, event):
                 if event.is_directory:
                     return
@@ -52,9 +64,8 @@ def _start_watchdog() -> None:
                 if not os.path.exists(path):
                     return
 
-                import time; time.sleep(0.5)   # let the file finish writing
+                time.sleep(0.5)   # let the file finish writing
 
-                is_img = ext in IMAGE_EXTS
                 job_id = config.enqueue_job(
                     filepath=path,
                     printer=settings["default_printer"],
@@ -71,7 +82,7 @@ def _start_watchdog() -> None:
                 )
                 log.info(f"Auto-queued {path} → job {job_id}")
 
-        observer = Observer()
+        observer = _Observer()
         for folder in watch_folders:
             if os.path.isdir(folder):
                 observer.schedule(_AutoPrintHandler(), folder, recursive=False)
@@ -81,9 +92,6 @@ def _start_watchdog() -> None:
         observer.start()
         log.info("Watchdog observer started.")
 
-    except ImportError:
-        log.info("watchdog not installed — auto-print watch folders disabled. "
-                 "Install with: pip install watchdog")
     except Exception:
         log.exception("Failed to start watchdog observer")
 
