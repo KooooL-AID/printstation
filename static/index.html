@@ -1,0 +1,2315 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PrintStation — wazzup@fedora</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+    :root {
+      --bg: #07070c;
+      --s1: #0e0e16;
+      --s2: #14141e;
+      --s3: #1a1a26;
+      --s4: #22222e;
+      --border: #2a2a38;
+      --border2: #363648;
+      --green: #00e87a;
+      --green-dim: rgba(0, 232, 122, 0.15);
+      --blue: #4d9fff;
+      --blue-dim: rgba(77, 159, 255, 0.15);
+      --red: #ff4d6d;
+      --red-dim: rgba(255, 77, 109, 0.15);
+      --yellow: #ffcc44;
+      --yellow-dim: rgba(255, 204, 68, 0.15);
+      --purple: #a78bfa;
+      --text: #dddde8;
+      --muted: #5a5a72;
+      --muted2: #8888a0;
+      --font: 'Outfit', sans-serif;
+      --mono: 'DM Mono', monospace;
+      --radius: 14px;
+      --radius-sm: 8px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Scanline overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(0deg,
+          transparent,
+          transparent 2px,
+          rgba(0, 0, 0, 0.03) 2px,
+          rgba(0, 0, 0, 0.03) 4px);
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* Ambient glow */
+    .glow-orb {
+      position: fixed;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      filter: blur(120px);
+      pointer-events: none;
+      opacity: 0.07;
+      z-index: 0;
+    }
+
+    .glow-1 {
+      background: var(--green);
+      top: -200px;
+      left: -200px;
+    }
+
+    .glow-2 {
+      background: var(--blue);
+      bottom: -200px;
+      right: -200px;
+    }
+
+    /* ── LAYOUT ── */
+    .app {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 68px;
+      background: var(--s1);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      flex-shrink: 0;
+      z-index: 50;
+    }
+
+    .sidebar-logo {
+      width: 42px;
+      height: 42px;
+      background: var(--green);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--mono);
+      font-weight: 500;
+      font-size: 13px;
+      color: #000;
+      margin-bottom: 30px;
+      box-shadow: 0 0 24px rgba(0, 232, 122, 0.35);
+      flex-shrink: 0;
+    }
+
+    .nav-item {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 20px;
+      margin-bottom: 6px;
+      transition: all 0.2s;
+      position: relative;
+      border: 1px solid transparent;
+    }
+
+    .nav-item:hover {
+      background: var(--s3);
+      border-color: var(--border);
+    }
+
+    .nav-item.active {
+      background: var(--green-dim);
+      border-color: rgba(0, 232, 122, 0.3);
+    }
+
+    .nav-item .tooltip {
+      position: absolute;
+      left: 56px;
+      background: var(--s3);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 12px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      z-index: 100;
+    }
+
+    .nav-item:hover .tooltip {
+      opacity: 1;
+    }
+
+    .sidebar-bottom {
+      margin-top: auto;
+    }
+
+    /* Main content */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Top bar */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 24px;
+      background: rgba(14, 14, 22, 0.9);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(20px);
+      position: sticky;
+      top: 0;
+      z-index: 40;
+    }
+
+    .page-title {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .page-title span {
+      color: var(--green);
+    }
+
+    .topbar-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .printer-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 14px;
+      background: var(--s2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 12px;
+      font-family: var(--mono);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+
+    .status-dot.online {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: blink 2s infinite;
+    }
+
+    .status-dot.busy {
+      background: var(--yellow);
+      box-shadow: 0 0 8px var(--yellow);
+    }
+
+    .status-dot.error {
+      background: var(--red);
+      box-shadow: 0 0 8px var(--red);
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: 0.4
+      }
+    }
+
+    /* Content area */
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    /* Pages */
+    .page {
+      display: none;
+    }
+
+    .page.active {
+      display: block;
+    }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--s1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .card-header h3 {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--muted2);
+    }
+
+    .card-header .card-icon {
+      font-size: 16px;
+    }
+
+    .card-body {
+      padding: 20px;
+    }
+
+    /* Grid */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+    }
+
+    .grid-auto {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    /* ── PRINT PAGE ── */
+    .print-layout {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 20px;
+    }
+
+    /* File picker */
+    .folder-tabs {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .folder-tab {
+      padding: 5px 12px;
+      background: var(--s2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 11px;
+      font-family: var(--mono);
+      cursor: pointer;
+      transition: all 0.2s;
+      color: var(--muted2);
+    }
+
+    .folder-tab.active {
+      background: var(--green-dim);
+      border-color: rgba(0, 232, 122, 0.3);
+      color: var(--green);
+    }
+
+    .folder-tab:hover {
+      border-color: var(--border2);
+      color: var(--text);
+    }
+
+    .file-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      background: var(--s2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .file-item:hover {
+      border-color: var(--border2);
+      background: var(--s3);
+    }
+
+    .file-item.selected {
+      border-color: rgba(0, 232, 122, 0.4);
+      background: var(--green-dim);
+    }
+
+    .file-icon {
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+
+    .file-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .file-name {
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-meta {
+      font-size: 11px;
+      color: var(--muted2);
+      font-family: var(--mono);
+      margin-top: 2px;
+    }
+
+    .file-pages {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--green);
+      background: var(--green-dim);
+      padding: 3px 8px;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+
+    /* Print controls */
+    .ctrl-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .ctrl-group {
+      flex: 1;
+    }
+
+    .ctrl-label {
+      font-size: 10px;
+      color: var(--muted2);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      font-family: var(--mono);
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .ctrl-input {
+      width: 100%;
+      padding: 11px 14px;
+      background: var(--s2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 15px;
+      font-weight: 500;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .ctrl-input:focus {
+      border-color: rgba(0, 232, 122, 0.5);
+    }
+
+    .ctrl-select {
+      width: 100%;
+      padding: 11px 14px;
+      background: var(--s2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      outline: none;
+      appearance: none;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .ctrl-select:focus {
+      border-color: rgba(0, 232, 122, 0.5);
+    }
+
+    /* Command preview */
+    .cmd-box {
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.6;
+      margin-bottom: 14px;
+    }
+
+    .cmd-prompt {
+      color: var(--muted);
+    }
+
+    .cmd-p {
+      color: var(--green);
+      font-weight: 500;
+    }
+
+    .cmd-file {
+      color: var(--blue);
+    }
+
+    .cmd-printer {
+      color: var(--yellow);
+    }
+
+    .cmd-range {
+      color: var(--red);
+    }
+
+    .cmd-copies {
+      color: var(--purple);
+    }
+
+    /* Buttons */
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 13px 20px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+      margin-bottom: 8px;
+    }
+
+    .btn-primary {
+      background: var(--green);
+      color: #000;
+      box-shadow: 0 4px 20px rgba(0, 232, 122, 0.25);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(0, 232, 122, 0.35);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary:disabled {
+      background: var(--s3);
+      color: var(--muted);
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-danger {
+      background: transparent;
+      border: 1px solid var(--red);
+      color: var(--red);
+    }
+
+    .btn-danger:hover {
+      background: var(--red-dim);
+    }
+
+    .btn-secondary {
+      background: var(--s2);
+      border: 1px solid var(--border2);
+      color: var(--text);
+    }
+
+    .btn-secondary:hover {
+      background: var(--s3);
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .btn-sm {
+      padding: 7px 14px;
+      font-size: 12px;
+      width: auto;
+      margin-bottom: 0;
+    }
+
+    /* Quick print */
+    .quick-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .quick-btn {
+      padding: 12px;
+      background: var(--s2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+    }
+
+    .quick-btn:hover {
+      border-color: var(--green);
+      background: var(--green-dim);
+    }
+
+    .quick-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .quick-info {
+      font-size: 10px;
+      color: var(--muted2);
+      font-family: var(--mono);
+      margin-top: 3px;
+    }
+
+    /* ── STATUS BAR ── */
+    .status-card {
+      background: var(--s2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      margin-bottom: 14px;
+    }
+
+    .status-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-icon-big {
+      font-size: 24px;
+    }
+
+    .status-info {
+      flex: 1;
+    }
+
+    .status-title {
+      font-size: 11px;
+      color: var(--muted2);
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .status-msg {
+      font-size: 13px;
+      color: var(--text);
+      margin-top: 2px;
+    }
+
+    .progress-wrap {
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      margin-top: 10px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--green);
+      border-radius: 2px;
+      transition: width 0.4s ease;
+      box-shadow: 0 0 10px var(--green);
+    }
+
+    /* Copy progress indicators */
+    .copy-dots {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .copy-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--border2);
+      transition: all 0.3s;
+    }
+
+    .copy-dot.done {
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+    }
+
+    .copy-dot.active {
+      background: var(--yellow);
+      box-shadow: 0 0 6px var(--yellow);
+      animation: blink 1s infinite;
+    }
+
+    /* ── INK PAGE ── */
+    .ink-big-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .ink-big-card {
+      background: var(--s1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      text-align: center;
+    }
+
+    .ink-tube {
+      height: 120px;
+      background: var(--s2);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-end;
+      margin: 0 auto 14px;
+      width: 60%;
+      position: relative;
+    }
+
+    .ink-fill {
+      width: 100%;
+      transition: height 1s ease;
+      border-radius: 6px 6px 0 0;
+    }
+
+    .ink-tube::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, transparent 50%);
+    }
+
+    .ink-pct-big {
+      font-family: var(--mono);
+      font-size: 28px;
+      font-weight: 500;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .ink-name-big {
+      font-size: 13px;
+      color: var(--muted2);
+    }
+
+    .ink-warn-banner {
+      background: var(--red-dim);
+      border: 1px solid rgba(255, 77, 109, 0.3);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      color: var(--red);
+      font-size: 13px;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .ink-warn-banner.show {
+      display: flex;
+    }
+
+    /* ── HISTORY PAGE ── */
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .history-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 14px 16px;
+      background: var(--s1);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0)
+      }
+    }
+
+    .h-icon {
+      font-size: 20px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .h-info {
+      flex: 1;
+    }
+
+    .h-action {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .h-details {
+      font-size: 11px;
+      color: var(--muted2);
+      font-family: var(--mono);
+      margin-top: 3px;
+    }
+
+    .h-time {
+      font-size: 10px;
+      color: var(--muted);
+      font-family: var(--mono);
+      flex-shrink: 0;
+    }
+
+    .h-badge {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-family: var(--mono);
+      font-weight: 500;
+    }
+
+    .h-badge.done {
+      background: var(--green-dim);
+      color: var(--green);
+    }
+
+    .h-badge.error {
+      background: var(--red-dim);
+      color: var(--red);
+    }
+
+    .h-badge.queued {
+      background: var(--yellow-dim);
+      color: var(--yellow);
+    }
+
+    .h-badge.warn {
+      background: var(--yellow-dim);
+      color: var(--yellow);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+      font-size: 13px;
+      font-family: var(--mono);
+    }
+
+    .empty-state .e-icon {
+      font-size: 40px;
+      display: block;
+      margin-bottom: 12px;
+      opacity: 0.4;
+    }
+
+    /* ── SETTINGS PAGE ── */
+    .settings-group {
+      margin-bottom: 24px;
+    }
+
+    .settings-label {
+      font-size: 11px;
+      color: var(--muted2);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      font-family: var(--mono);
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .settings-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 16px;
+      background: var(--s1);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 8px;
+    }
+
+    .settings-row-info {
+      flex: 1;
+    }
+
+    .settings-row-title {
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .settings-row-desc {
+      font-size: 11px;
+      color: var(--muted2);
+      margin-top: 2px;
+    }
+
+    .toggle {
+      width: 44px;
+      height: 24px;
+      border-radius: 12px;
+      background: var(--border2);
+      cursor: pointer;
+      position: relative;
+      transition: background 0.2s;
+      flex-shrink: 0;
+      border: none;
+    }
+
+    .toggle.on {
+      background: var(--green);
+    }
+
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      top: 3px;
+      left: 3px;
+      transition: transform 0.2s;
+    }
+
+    .toggle.on::after {
+      transform: translateX(20px);
+    }
+
+    /* ── TOAST ── */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 9999;
+    }
+
+    .toast {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: var(--s2);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      font-size: 13px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+      transform: translateX(120%);
+      transition: transform 0.3s ease;
+      max-width: 320px;
+    }
+
+    .toast.show {
+      transform: translateX(0);
+    }
+
+    .toast.success {
+      border-color: rgba(0, 232, 122, 0.4);
+    }
+
+    .toast.error {
+      border-color: rgba(255, 77, 109, 0.4);
+    }
+
+    .toast.info {
+      border-color: rgba(77, 159, 255, 0.4);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border2);
+      border-radius: 2px;
+    }
+
+    /* Section header */
+    .sec-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .sec-head h2 {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .sec-head-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* ── UPLOAD ZONE ── */
+    .upload-zone {
+      border: 2px dashed var(--border2);
+      border-radius: var(--radius-sm);
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: rgba(14, 14, 22, 0.3);
+      margin-bottom: 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: var(--green);
+      background: rgba(0, 232, 122, 0.05);
+      box-shadow: 0 0 15px rgba(0, 232, 122, 0.1);
+    }
+
+    .upload-icon {
+      font-size: 24px;
+      color: var(--muted2);
+      transition: transform 0.2s;
+    }
+
+    .upload-zone:hover .upload-icon {
+      transform: translateY(-2px);
+      color: var(--green);
+    }
+
+    .upload-text {
+      font-size: 12px;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .upload-subtext {
+      font-size: 10px;
+      color: var(--muted2);
+      font-family: var(--mono);
+    }
+
+    /* ── FILE ORDERING ── */
+    .order-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      background: var(--s3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 4px;
+      font-size: 11px;
+      font-family: var(--mono);
+    }
+
+    .order-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .order-name {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .order-btn {
+      background: var(--s2);
+      border: 1px solid var(--border2);
+      color: var(--text);
+      cursor: pointer;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      font-size: 10px;
+      transition: all 0.15s;
+    }
+
+    .order-btn:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    /* ── CONFIRM MODAL ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: all;
+    }
+    .modal-box {
+      background: var(--s2);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      padding: 28px 32px;
+      max-width: 440px;
+      width: 90%;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+      transform: translateY(8px);
+      transition: transform 0.2s;
+    }
+    .modal-overlay.open .modal-box {
+      transform: translateY(0);
+    }
+    .modal-icon {
+      font-size: 32px;
+      margin-bottom: 12px;
+    }
+    .modal-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-bright);
+      margin-bottom: 8px;
+    }
+    .modal-body {
+      font-size: 12px;
+      font-family: var(--mono);
+      color: var(--muted2);
+      line-height: 1.7;
+      white-space: pre-wrap;
+      border: 1px solid var(--border);
+      background: var(--s3);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 20px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Print Confirm Modal -->
+  <div class="modal-overlay" id="printModal">
+    <div class="modal-box">
+      <div class="modal-icon">🖨️</div>
+      <div class="modal-title" id="modalTitle">Confirm Print Job</div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closePrintModal(false)">Cancel</button>
+        <button class="btn btn-primary" id="modalConfirmBtn" onclick="closePrintModal(true)">✅ &nbsp;Print Now</button>
+      </div>
+    </div>
+  </div>
+  <div class="glow-orb glow-1"></div>
+  <div class="glow-orb glow-2"></div>
+
+  <div class="app">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-logo">PS</div>
+      <div class="nav-item active" onclick="showPage('print')" id="nav-print">
+        🖨️<div class="tooltip">Print</div>
+      </div>
+      <div class="nav-item" onclick="showPage('ink')" id="nav-ink">
+        🖋️<div class="tooltip">Ink Levels</div>
+      </div>
+      <div class="nav-item" onclick="showPage('history')" id="nav-history">
+        📋<div class="tooltip">History</div>
+      </div>
+      <div class="sidebar-bottom">
+        <div class="nav-item" onclick="showPage('settings')" id="nav-settings">
+          ⚙️<div class="tooltip">Settings</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="main">
+      <!-- TOPBAR -->
+      <div class="topbar">
+        <div class="page-title" id="pageTitle">Print<span>Station</span></div>
+        <div class="topbar-right">
+          <div class="printer-status" id="printerStatus1">
+            <div class="status-dot" id="dot1"></div>
+            <span id="p1name">L5290</span>
+          </div>
+          <div class="printer-status" id="printerStatus2">
+            <div class="status-dot" id="dot2"></div>
+            <span id="p2name">L3250</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONTENT -->
+      <div class="content">
+
+        <!-- ── PRINT PAGE ── -->
+        <div class="page active" id="page-print">
+          <div class="print-layout">
+
+            <!-- LEFT -->
+            <div>
+              <!-- Status -->
+              <div class="status-card" id="statusCard">
+                <div class="status-top">
+                  <div class="status-icon-big" id="statusIcon">🖨️</div>
+                  <div class="status-info">
+                    <div class="status-title">Status</div>
+                    <div class="status-msg" id="statusMsg">Ready to print</div>
+                  </div>
+                  <button class="btn btn-secondary btn-sm" onclick="cancelJobs()">Cancel All</button>
+                </div>
+                <div class="progress-wrap">
+                  <div class="progress-fill" id="progressFill" style="width:0%"></div>
+                </div>
+                <div class="copy-dots" id="copyDots"></div>
+              </div>
+
+              <!-- File selector -->
+              <div class="card" style="margin-bottom:16px">
+                <div class="card-header">
+                  <span class="card-icon">📁</span>
+                  <h3>Select File</h3>
+                  <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="loadFiles()">↻
+                    Refresh</button>
+                </div>
+                <div class="card-body">
+                  <!-- Upload Zone -->
+                  <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+                    <span class="upload-icon">📤</span>
+                    <span class="upload-text">Drag & drop files here or click to upload</span>
+                    <span class="upload-subtext">PDF, JPG, PNG, WEBP, BMP</span>
+                    <input type="file" id="fileInput" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp" style="display:none" onchange="handleFileUploads(this.files)">
+                  </div>
+                  <div class="folder-tabs" id="folderTabs"></div>
+                  <div class="file-grid" id="fileGrid">
+                    <div class="empty-state"><span class="e-icon">📂</span>Loading files...</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Quick chapters -->
+              <div class="card">
+                <div class="card-header">
+                  <span class="card-icon">⚡</span>
+                  <h3>Quick Print — Hardbound Chapters</h3>
+                </div>
+                <div class="card-body">
+                  <div class="quick-grid" id="quickGrid">
+                    <div style="color:var(--muted);font-size:12px;font-family:var(--mono);grid-column:1/-1">Loading
+                      chapters...</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- RIGHT: Controls -->
+            <div>
+              <div class="card" style="margin-bottom:16px">
+                <div class="card-header">
+                  <span class="card-icon">⚙️</span>
+                  <h3>Print Settings</h3>
+                </div>
+                <div class="card-body">
+
+                  <div class="ctrl-row" id="pageRangeCtrls">
+                    <div class="ctrl-group">
+                      <span class="ctrl-label">Start Page</span>
+                      <input type="number" class="ctrl-input" id="startPage" value="1" min="1" oninput="updateCmd()">
+                    </div>
+                    <div class="ctrl-group">
+                      <span class="ctrl-label">End Page</span>
+                      <input type="number" class="ctrl-input" id="endPage" value="1" min="1" oninput="updateCmd()">
+                    </div>
+                  </div>
+
+                  <!-- Image & Multi-file Compilation Options -->
+                  <div id="compilationCtrls" style="display:none; border-top:1px solid var(--border); padding-top:14px; margin-top:14px; margin-bottom:14px;">
+                    <span class="ctrl-label" style="color:var(--green); margin-bottom:10px;">Image / Compilation Options</span>
+                    
+                    <div class="ctrl-row">
+                      <div class="ctrl-group">
+                        <span class="ctrl-label">Scanner Filter</span>
+                        <select class="ctrl-select" id="imgFilter" onchange="updateCmd()">
+                          <option value="none">None (Original Color)</option>
+                          <option value="grayscale">Grayscale</option>
+                          <option value="scanner" selected>Document Scan (High Contrast)</option>
+                        </select>
+                      </div>
+                      <div class="ctrl-group">
+                        <span class="ctrl-label">Image Fit</span>
+                        <select class="ctrl-select" id="imgFit" onchange="updateCmd()">
+                          <option value="fit" selected>Fit to Page</option>
+                          <option value="fill">Fill / Crop</option>
+                          <option value="none">No Scaling</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="ctrl-row">
+                      <div class="ctrl-group">
+                        <span class="ctrl-label">Margins</span>
+                        <select class="ctrl-select" id="imgMargin" onchange="updateCmd()">
+                          <option value="none">None (0mm)</option>
+                          <option value="small" selected>Small (10mm)</option>
+                          <option value="medium">Medium (20mm)</option>
+                        </select>
+                      </div>
+                      <div class="ctrl-group">
+                        <span class="ctrl-label">Auto Rotate</span>
+                        <select class="ctrl-select" id="imgAutoRotate" onchange="updateCmd()">
+                          <option value="true" selected>Yes (Rotate to Fit)</option>
+                          <option value="false">No</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <span class="ctrl-label" style="margin-top:10px;">File Order</span>
+                    <div id="fileOrderList" style="background:var(--s2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px; max-height:160px; overflow-y:auto; margin-bottom:10px;">
+                      <!-- Filled dynamically -->
+                    </div>
+                  </div>
+
+                  <div class="ctrl-row">
+                    <div class="ctrl-group">
+                      <span class="ctrl-label">Copies</span>
+                      <input type="number" class="ctrl-input" id="copies" value="1" min="1" max="99"
+                        oninput="updateCmd()">
+                    </div>
+                    <div class="ctrl-group">
+                      <span class="ctrl-label">Printer</span>
+                      <select class="ctrl-select" id="printerSel" onchange="updateCmd()">
+                        <option value="L5290">L5290</option>
+                        <option value="L3250">L3250</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- Print Quality -->
+                  <div class="ctrl-row">
+                    <div class="ctrl-group" style="flex:1">
+                      <span class="ctrl-label">Print Quality</span>
+                      <select class="ctrl-select" id="printQuality" onchange="updateCmd()">
+                        <option value="draft">💧 Draft / Economy (saves ~40% ink)</option>
+                        <option value="normal" selected>✅ Normal (balanced)</option>
+                        <option value="high">⭐ High (best output)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="cmd-box" id="cmdBox">
+                    <span class="cmd-prompt">wazzup@fedora:~$ </span>
+                    <span class="cmd-p">p</span>
+                    <span class="cmd-file"> file.pdf</span>
+                    <span class="cmd-printer"> L5290</span>
+                    <span class="cmd-range"> 1-1</span>
+                  </div>
+
+                  <div id="selectedFileInfo"
+                    style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;font-family:var(--mono);color:var(--muted2);display:none">
+                    <span id="selFileDetails"></span>
+                  </div>
+
+                  <button class="btn btn-primary" id="printBtn" onclick="startPrint()">
+                    🖨️ &nbsp;Print Now
+                  </button>
+                  <button class="btn btn-danger" onclick="cancelJobs()">
+                    ✕ &nbsp;Cancel All Jobs
+                  </button>
+                  <button class="btn btn-secondary" onclick="enablePrinter()">
+                    ⚡ &nbsp;Re-enable Printer
+                  </button>
+
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── INK PAGE ── -->
+        <div class="page" id="page-ink">
+          <div class="sec-head">
+            <h2>🖋️ Ink Levels</h2>
+            <div class="sec-head-actions">
+              <select class="ctrl-select" id="inkPrinterSel" onchange="loadInk()" style="width:auto;padding:7px 12px">
+                <option value="L5290">L5290</option>
+                <option value="L3250">L3250</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="loadInk()">↻ Refresh</button>
+            </div>
+          </div>
+
+          <div class="ink-warn-banner" id="inkWarn">
+            ⚠️ <span id="inkWarnMsg">Black ink is critically low — refill before printing!</span>
+          </div>
+
+          <div class="ink-big-grid" id="inkBigGrid">
+            <div
+              style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted);font-family:var(--mono);font-size:13px">
+              Loading ink levels...</div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><span class="card-icon">ℹ️</span>
+              <h3>Ink Status Info</h3>
+            </div>
+            <div class="card-body">
+              <p style="font-size:13px;color:var(--muted2);line-height:1.7">
+                Ink levels are read directly from CUPS printer data.
+                <strong style="color:var(--text)">Black ink below 20%</strong> — consider refilling before large print
+                jobs.
+                The L5290 uses the <strong style="color:var(--text)">Epson 003</strong> ink series (Black, Cyan,
+                Magenta, Yellow).
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── HISTORY PAGE ── -->
+        <div class="page" id="page-history">
+          <div class="sec-head">
+            <h2>📋 Print History</h2>
+            <button class="btn btn-secondary btn-sm" onclick="loadHistory()">↻ Refresh</button>
+          </div>
+          <div class="history-list" id="historyList">
+            <div class="empty-state"><span class="e-icon">📭</span>No print jobs yet</div>
+          </div>
+        </div>
+
+        <!-- ── SETTINGS PAGE ── -->
+        <div class="page" id="page-settings">
+          <div class="sec-head">
+            <h2>⚙️ Settings</h2>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <div class="settings-group">
+                <span class="settings-label">Printer Settings</span>
+                <div class="settings-row">
+                  <div class="settings-row-info">
+                    <div class="settings-row-title">Default Printer</div>
+                    <div class="settings-row-desc">Used when no printer specified</div>
+                  </div>
+                  <select class="ctrl-select" id="settDefaultPrinter" style="width:auto;padding:7px 12px">
+                    <option value="L5290">L5290</option>
+                    <option value="L3250">L3250</option>
+                  </select>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-info">
+                    <div class="settings-row-title">Paper Size</div>
+                    <div class="settings-row-desc">Default media type for all jobs</div>
+                  </div>
+                  <select class="ctrl-select" id="settMedia" style="width:auto;padding:7px 12px">
+                    <option value="Letter">Letter (8.5×11)</option>
+                    <option value="A4">A4</option>
+                    <option value="Legal">Legal</option>
+                  </select>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-info">
+                    <div class="settings-row-title">Auto-Reverse Pages</div>
+                    <div class="settings-row-desc">Print last page first for correct stacking</div>
+                  </div>
+                  <button class="toggle on" id="settAutoReverse" onclick="toggleSetting('auto_reverse', this)"></button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="settings-group">
+                <span class="settings-label">System Actions</span>
+                <div class="settings-row">
+                  <div class="settings-row-info">
+                    <div class="settings-row-title">Restart CUPS</div>
+                    <div class="settings-row-desc">Fix printer not responding errors</div>
+                  </div>
+                  <button class="btn btn-secondary btn-sm" onclick="restartCups()">Restart</button>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-info">
+                    <div class="settings-row-title">Re-enable L5290</div>
+                    <div class="settings-row-desc">Fix "printer disabled" errors</div>
+                  </div>
+                  <button class="btn btn-secondary btn-sm" onclick="enablePrinter('L5290')">Enable</button>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-info">
+                    <div class="settings-row-title">Re-enable L3250</div>
+                    <div class="settings-row-desc">Fix "printer disabled" errors</div>
+                  </div>
+                  <button class="btn btn-secondary btn-sm" onclick="enablePrinter('L3250')">Enable</button>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-info">
+                    <div class="settings-row-title">Cancel All Jobs</div>
+                    <div class="settings-row-desc">Clear all pending print jobs</div>
+                  </div>
+                  <button class="btn btn-danger btn-sm" onclick="cancelJobs()">Cancel All</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" style="width:200px" onclick="saveSettings()">💾 &nbsp;Save Settings</button>
+        </div>
+
+      </div><!-- /content -->
+    </div><!-- /main -->
+  </div><!-- /app -->
+
+  <!-- Toasts -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script>
+    const API = 'http://localhost:5000/api';
+    let selectedFiles = [];
+    let allFiles = [];
+    let currentFolder = '';
+    let streamSource = null;
+
+    // ── NAVIGATION ──────────────────────────────────────────────
+    function showPage(name) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.getElementById('page-' + name).classList.add('active');
+      document.getElementById('nav-' + name).classList.add('active');
+
+      const titles = {
+        print: 'Print<span style="color:var(--green)">Station</span>',
+        ink: '🖋️ Ink <span style="color:var(--green)">Levels</span>',
+        history: '📋 Print <span style="color:var(--green)">History</span>',
+        settings: '⚙️ <span style="color:var(--green)">Settings</span>'
+      };
+      document.getElementById('pageTitle').innerHTML = titles[name];
+
+      if (name === 'ink') loadInk();
+      if (name === 'history') loadHistory();
+      if (name === 'settings') loadSettingsUI();
+    }
+
+    // ── INIT ────────────────────────────────────────────────────
+    async function init() {
+      await Promise.all([loadPrinters(), loadFiles(), loadInk()]);
+      startStream();
+      setInterval(loadPrinters, 10000);
+
+      // Setup drag and drop for uploadZone
+      const zone = document.getElementById('uploadZone');
+      if (zone) {
+        ['dragenter', 'dragover'].forEach(eventName => {
+          zone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            zone.classList.add('dragover');
+          }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+          zone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            zone.classList.remove('dragover');
+          }, false);
+        });
+
+        zone.addEventListener('drop', (e) => {
+          const dt = e.dataTransfer;
+          const files = dt.files;
+          handleFileUploads(files);
+        }, false);
+      }
+    }
+
+    // ── PRINTERS ────────────────────────────────────────────────
+    async function loadPrinters() {
+      try {
+        const r = await fetch(`${API}/printers`);
+        const d = await r.json();
+        const printers = d.printers || [];
+
+        const names = ['L5290', 'L3250'];
+        names.forEach((name, i) => {
+          const p = printers.find(x => x.name === name);
+          const dot = document.getElementById(`dot${i + 1}`);
+          const nameEl = document.getElementById(`p${i + 1}name`);
+          if (p) {
+            nameEl.textContent = p.name;
+            dot.className = 'status-dot ' + (p.status === 'online' ? 'online' : p.status === 'busy' ? 'busy' : p.status === 'disabled' ? 'error' : '');
+          }
+        });
+      } catch (e) {
+        document.getElementById('dot1').className = 'status-dot error';
+      }
+    }
+
+    // ── FILES ────────────────────────────────────────────────────
+    async function loadFiles(folder) {
+      try {
+        const url = folder ? `${API}/files?folder=${encodeURIComponent(folder)}` : `${API}/files`;
+        const r = await fetch(url);
+        const d = await r.json();
+
+        allFiles = d.files || [];
+        currentFolder = d.folder || '';
+
+        // Folder tabs
+        const tabs = document.getElementById('folderTabs');
+        tabs.innerHTML = (d.folders || []).map(f => {
+          const name = f.split('/').pop();
+          return `<div class="folder-tab ${f === currentFolder ? 'active' : ''}" onclick="loadFiles('${f}')">${name}</div>`;
+        }).join('');
+
+        // File grid
+        const grid = document.getElementById('fileGrid');
+        if (allFiles.length === 0) {
+          grid.innerHTML = '<div class="empty-state"><span class="e-icon">📂</span>No supported files in this folder</div>';
+          return;
+        }
+
+        grid.innerHTML = allFiles.map((f, i) => {
+          const isSelected = selectedFiles.some(x => x.path === f.path);
+          const icon = f.type === 'image' ? '🖼️' : '📄';
+          return `
+            <div class="file-item ${isSelected ? 'selected' : ''}" onclick="toggleFileSelect(${i}, event)">
+              <input type="checkbox" class="file-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleFileSelect(${i}, event)" style="margin-right: 8px; transform: scale(1.1); accent-color: var(--green); cursor: pointer;">
+              <div class="file-icon">${icon}</div>
+              <div class="file-info">
+                <div class="file-name">${f.name}</div>
+                <div class="file-meta">${f.size} · ${f.modified}</div>
+              </div>
+              <div class="file-pages">${f.pages}p</div>
+            </div>
+          `;
+        }).join('');
+
+        // Update quick buttons
+        updateQuickButtons();
+
+        // Maintain selection after reload
+        selectedFiles = selectedFiles.map(sf => {
+          const found = allFiles.find(f => f.path === sf.path);
+          return found || sf;
+        }).filter(sf => sf !== null);
+        updateSelectionUI();
+
+      } catch (e) {
+        document.getElementById('fileGrid').innerHTML =
+          '<div class="empty-state"><span class="e-icon">⚠️</span>Cannot connect to server</div>';
+      }
+    }
+
+    function selectFile(idx, silent) {
+      if (idx >= 0 && idx < allFiles.length) {
+        selectedFiles = [allFiles[idx]];
+        updateSelectionUI();
+        if (!silent && selectedFiles[0]) {
+          showToast(`📄 Selected: ${selectedFiles[0].name}`, 'info');
+        }
+      }
+    }
+
+    function toggleFileSelect(idx, event) {
+      const file = allFiles[idx];
+      const selectedIndex = selectedFiles.findIndex(f => f.path === file.path);
+      
+      const isCheckboxClick = event && (event.target.type === 'checkbox' || event.target.classList.contains('file-checkbox'));
+      
+      if (!isCheckboxClick && (!event || (!event.ctrlKey && !event.shiftKey))) {
+        // Single selection
+        selectedFiles = [file];
+      } else {
+        // Multi-selection (toggle)
+        if (selectedIndex >= 0) {
+          selectedFiles.splice(selectedIndex, 1);
+        } else {
+          selectedFiles.push(file);
+        }
+      }
+      
+      updateSelectionUI();
+    }
+
+    function updateSelectionUI() {
+      const items = document.querySelectorAll('.file-item');
+      allFiles.forEach((f, i) => {
+        const item = items[i];
+        if (item) {
+          const isSelected = selectedFiles.some(x => x.path === f.path);
+          item.classList.toggle('selected', isSelected);
+          const checkbox = item.querySelector('.file-checkbox');
+          if (checkbox) checkbox.checked = isSelected;
+        }
+      });
+
+      const pageRangeCtrls = document.getElementById('pageRangeCtrls');
+      const compilationCtrls = document.getElementById('compilationCtrls');
+      const info = document.getElementById('selectedFileInfo');
+      const details = document.getElementById('selFileDetails');
+
+      if (selectedFiles.length === 0) {
+        info.style.display = 'none';
+        pageRangeCtrls.style.display = 'flex';
+        compilationCtrls.style.display = 'none';
+        document.getElementById('printBtn').disabled = true;
+      } else if (selectedFiles.length === 1 && selectedFiles[0].type === 'pdf') {
+        info.style.display = 'block';
+        details.textContent = `Selected: ${selectedFiles[0].name} · ${selectedFiles[0].pages} pages · ${selectedFiles[0].size}`;
+        pageRangeCtrls.style.display = 'flex';
+        compilationCtrls.style.display = 'none';
+        document.getElementById('printBtn').disabled = false;
+        
+        document.getElementById('startPage').value = 1;
+        document.getElementById('endPage').value = selectedFiles[0].pages;
+      } else {
+        info.style.display = 'block';
+        const imageCount = selectedFiles.filter(f => f.type === 'image').length;
+        const pdfCount = selectedFiles.filter(f => f.type === 'pdf').length;
+        
+        details.textContent = `Batch Selected: ${selectedFiles.length} file(s) (${imageCount} image(s), ${pdfCount} PDF(s))`;
+        pageRangeCtrls.style.display = 'none';
+        compilationCtrls.style.display = 'block';
+        document.getElementById('printBtn').disabled = false;
+        
+        renderFileOrderList();
+      }
+
+      updateCmd();
+    }
+
+    function renderFileOrderList() {
+      const container = document.getElementById('fileOrderList');
+      if (selectedFiles.length === 0) {
+        container.innerHTML = '<div style="color:var(--muted);font-size:11px;text-align:center;padding:8px;">No files selected</div>';
+        return;
+      }
+      
+      container.innerHTML = selectedFiles.map((f, i) => {
+        const icon = f.type === 'image' ? '🖼️' : '📄';
+        return `
+          <div class="order-item">
+            <span style="font-size:12px">${icon}</span>
+            <span class="order-name" title="${f.name}">${f.name}</span>
+            <button class="order-btn" onclick="moveFile(${i}, -1); event.stopPropagation();">▲</button>
+            <button class="order-btn" onclick="moveFile(${i}, 1); event.stopPropagation();">▼</button>
+            <button class="order-btn" onclick="removeFileFromSelection(${i}); event.stopPropagation();" style="color:var(--red); border-color:var(--red-dim)">✕</button>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    function moveFile(index, direction) {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= selectedFiles.length) return;
+      
+      const temp = selectedFiles[index];
+      selectedFiles[index] = selectedFiles[targetIndex];
+      selectedFiles[targetIndex] = temp;
+      
+      updateSelectionUI();
+    }
+    
+    function removeFileFromSelection(index) {
+      selectedFiles.splice(index, 1);
+      updateSelectionUI();
+    }
+
+    // ── UPLOAD HANDLERS ──────────────────────────────────────────
+    async function handleFileUploads(files) {
+      if (!files || files.length === 0) return;
+      
+      showToast(`Uploading ${files.length} file(s)...`, 'info');
+      
+      let successCount = 0;
+      let errorMsgs = [];
+      
+      const uploadPromises = Array.from(files).map(async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('folder', currentFolder);
+        
+        try {
+          const r = await fetch(`${API}/upload`, {
+            method: 'POST',
+            body: formData
+          });
+          const d = await r.json();
+          if (r.ok && d.success) {
+            successCount++;
+            if (files.length === 1) {
+              return d.file;
+            }
+          } else {
+            errorMsgs.push(`${file.name}: ${d.error || 'Upload failed'}`);
+          }
+        } catch (e) {
+          errorMsgs.push(`${file.name}: Network error`);
+        }
+        return null;
+      });
+      
+      const results = await Promise.all(uploadPromises);
+      
+      if (successCount > 0) {
+        showToast(`Uploaded ${successCount} file(s) successfully!`, 'success');
+        await loadFiles(currentFolder);
+        
+        if (files.length === 1 && results[0]) {
+          const uploadedFile = results[0];
+          const idx = allFiles.findIndex(f => f.path === uploadedFile.path);
+          if (idx >= 0) {
+            selectFile(idx);
+          }
+        }
+      }
+      
+      if (errorMsgs.length > 0) {
+        showToast(`❌ Errors:\n${errorMsgs.slice(0, 3).join('\n')}`, 'error');
+      }
+    }
+
+    function updateQuickButtons() {
+      // Look for hardbound chapters
+      const hardbound = allFiles.filter(f =>
+        f.name.match(/CHAPTER/i) || f.path.includes('hardbound')
+      );
+
+      const grid = document.getElementById('quickGrid');
+
+      let btns = hardbound.map(f => `
+    <div class="quick-btn" onclick="quickPrint('${f.path}', 1, ${f.pages})">
+      <div class="quick-name">${f.name.replace('.pdf', '')}</div>
+      <div class="quick-info">${f.pages} pages · all</div>
+    </div>
+  `).join('');
+
+      // Add thesis batches if FINAL-DEFENSE exists
+      const thesis = allFiles.find(f => f.name.includes('FINAL-DEFENSE') && f.name.includes('letterhead'));
+      if (thesis) {
+        btns += `
+      <div class="quick-btn" onclick="quickPrint('${thesis.path}', 10, 30)">
+        <div class="quick-name">Thesis Batch 1</div>
+        <div class="quick-info">Pages 10-30 · 21 sheets</div>
+      </div>
+      <div class="quick-btn" onclick="quickPrint('${thesis.path}', 31, 60)">
+        <div class="quick-name">Thesis Batch 2</div>
+        <div class="quick-info">Pages 31-60 · 30 sheets</div>
+      </div>
+      <div class="quick-btn" onclick="quickPrint('${thesis.path}', 61, 138)">
+        <div class="quick-name">Thesis Batch 3-5</div>
+        <div class="quick-info">Pages 61-138</div>
+      </div>
+    `;
+      }
+
+      grid.innerHTML = btns || '<div style="color:var(--muted);font-size:12px;font-family:var(--mono);grid-column:1/-1">No chapter files found in current folder</div>';
+    }
+
+    function quickPrint(path, start, end) {
+      const idx = allFiles.findIndex(f => f.path === path);
+      if (idx >= 0) {
+        selectFile(idx, true);
+        document.getElementById('startPage').value = start;
+        document.getElementById('endPage').value = end;
+        updateCmd();
+        showToast(`⚡ Quick print set: pages ${start}-${end}`, 'info');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+
+    // ── COMMAND PREVIEW ──────────────────────────────────────────
+    function updateCmd() {
+      const printer = document.getElementById('printerSel').value;
+      const copies = document.getElementById('copies').value;
+      const quality = document.getElementById('printQuality')?.value || 'normal';
+      const qualityTag = quality !== 'normal' ? ` <span class="cmd-copies">${quality}</span>` : '';
+      const copiesPart = copies > 1 ? ` <span class="cmd-copies">${copies}x</span>` : '';
+
+      if (selectedFiles.length === 0) {
+        document.getElementById('cmdBox').innerHTML = `
+          <span class="cmd-prompt">wazzup@fedora:~$ </span><span class="cmd-p">p</span> <span class="cmd-file">file.pdf</span> <span class="cmd-printer">${printer}</span>
+        `;
+        return;
+      }
+
+      if (selectedFiles.length === 1 && selectedFiles[0].type === 'pdf') {
+        const fname = selectedFiles[0].name;
+        const start = document.getElementById('startPage').value;
+        const end = document.getElementById('endPage').value;
+        document.getElementById('cmdBox').innerHTML = `
+          <span class="cmd-prompt">wazzup@fedora:~$ </span><span class="cmd-p">p</span> <span class="cmd-file">~/.../${fname}</span> <span class="cmd-printer">${printer}</span> <span class="cmd-range">${start}-${end}</span>${copiesPart}${qualityTag}
+        `;
+      } else {
+        const filter = document.getElementById('imgFilter').value;
+        const fit = document.getElementById('imgFit').value;
+        const margin = document.getElementById('imgMargin').value;
+        const rotate = document.getElementById('imgAutoRotate').value;
+        const filesLabel = selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files`;
+        
+        document.getElementById('cmdBox').innerHTML = `
+          <span class="cmd-prompt">wazzup@fedora:~$ </span><span class="cmd-p">compile-print</span> <span class="cmd-file">"${filesLabel}"</span> <span class="cmd-printer">${printer}</span> <span class="cmd-range">[filter=${filter} fit=${fit} margin=${margin} rotate=${rotate}]</span>${copiesPart}${qualityTag}
+        `;
+      }
+    }
+
+
+    // ── PRINT ───────────────────────────────────────────────────
+    async function startPrint() {
+      if (selectedFiles.length === 0) { showToast('Select at least one file first!', 'error'); return; }
+
+      const printer = document.getElementById('printerSel').value;
+      const copies = parseInt(document.getElementById('copies').value);
+      const media = document.getElementById('settMedia')?.value || 'A4';
+
+      let payload = {
+        printer,
+        copies,
+        media,
+        quality: document.getElementById('printQuality').value
+      };
+
+      let confirmMsg = "";
+
+      if (selectedFiles.length === 1 && selectedFiles[0].type === 'pdf') {
+        const start = parseInt(document.getElementById('startPage').value);
+        const end = parseInt(document.getElementById('endPage').value);
+
+        if (start > end) { showToast('Start page must be ≤ end page!', 'error'); return; }
+        if (end > selectedFiles[0].pages) { showToast(`Max pages: ${selectedFiles[0].pages}`, 'error'); return; }
+
+        payload.filepath = selectedFiles[0].path;
+        payload.start = start;
+        payload.end = end;
+
+        const sheets = (end - start + 1) * copies;
+        confirmMsg = `🖨️ Print PDF:\n${selectedFiles[0].name}\n\nPages: ${start}→${end} × ${copies} cop${copies === 1 ? 'y' : 'ies'}\nSheets needed: ${sheets}\nPrinter: ${printer}\n\nMake sure ${sheets} sheet(s) are loaded!`;
+      } else {
+        payload.filepaths = selectedFiles.map(f => f.path);
+        payload.image_options = {
+          filter: document.getElementById('imgFilter').value,
+          fit: document.getElementById('imgFit').value,
+          margin: document.getElementById('imgMargin').value,
+          auto_rotate: document.getElementById('imgAutoRotate').value === 'true'
+        };
+
+        let estimatedPages = 0;
+        selectedFiles.forEach(f => {
+          if (f.type === 'image') estimatedPages += 1;
+          else estimatedPages += f.pages;
+        });
+
+        const sheets = estimatedPages * copies;
+        confirmMsg = `🖨️ Combine & Print ${selectedFiles.length} file(s):\n${selectedFiles.map(f => '• ' + f.name).join('\n')}\n\nEstimated Pages: ${estimatedPages} × ${copies} cop${copies === 1 ? 'y' : 'ies'}\nSheets needed: ~${sheets}\nPrinter: ${printer}\n\nMake sure ${sheets} sheet(s) are loaded!`;
+      }
+
+      // Show custom modal instead of native confirm()
+      const proceed = await showPrintConfirm(confirmMsg);
+      if (!proceed) return;
+
+      try {
+        document.getElementById('printBtn').disabled = true;
+        const r = await fetch(`${API}/print`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const d = await r.json();
+        if (r.ok) {
+          showToast(`✅ Print job started!`, 'success');
+          updateCopyDots(copies, 0);
+        } else {
+          showToast(`❌ ${d.error}`, 'error');
+          document.getElementById('printBtn').disabled = false;
+        }
+      } catch (e) {
+        showToast('❌ Cannot connect to server. Run: python3 app.py', 'error');
+        document.getElementById('printBtn').disabled = false;
+      }
+    }
+
+    // ── CONFIRM MODAL HELPERS ─────────────────────────────────────
+    let _modalResolve = null;
+
+    function showPrintConfirm(message) {
+      return new Promise((resolve) => {
+        _modalResolve = resolve;
+        document.getElementById('modalBody').textContent = message;
+        document.getElementById('printModal').classList.add('open');
+      });
+    }
+
+    function closePrintModal(confirmed) {
+      document.getElementById('printModal').classList.remove('open');
+      if (_modalResolve) {
+        _modalResolve(confirmed);
+        _modalResolve = null;
+      }
+    }
+
+    // Close modal by clicking the dark overlay background
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('printModal')?.addEventListener('click', function(e) {
+        if (e.target === this) closePrintModal(false);
+      });
+    });
+
+
+
+    function updateCopyDots(total, current) {
+      const dots = document.getElementById('copyDots');
+      if (total <= 1) { dots.innerHTML = ''; return; }
+      dots.innerHTML = Array.from({ length: total }, (_, i) => `
+    <div class="copy-dot ${i < current ? 'done' : i === current ? 'active' : ''}"></div>
+  `).join('');
+    }
+
+    // ── CANCEL / ENABLE ─────────────────────────────────────────
+    async function cancelJobs() {
+      const printer = document.getElementById('printerSel')?.value || 'L5290';
+      try {
+        await fetch(`${API}/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ printer })
+        });
+        showToast(`🚫 Cancelled all jobs on ${printer}`, 'info');
+        document.getElementById('printBtn').disabled = false;
+      } catch (e) { showToast('❌ Server offline', 'error'); }
+    }
+
+    async function enablePrinter(printer) {
+      printer = printer || document.getElementById('printerSel')?.value || 'L5290';
+      try {
+        await fetch(`${API}/enable`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ printer })
+        });
+        showToast(`⚡ ${printer} re-enabled!`, 'success');
+        loadPrinters();
+      } catch (e) { showToast('❌ Server offline', 'error'); }
+    }
+
+    async function restartCups() {
+      try {
+        showToast('🔄 Restarting CUPS...', 'info');
+        await fetch(`${API}/restart-cups`, { method: 'POST' });
+        showToast('✅ CUPS restarted!', 'success');
+        setTimeout(loadPrinters, 3000);
+      } catch (e) { showToast('❌ Server offline', 'error'); }
+    }
+
+    // ── INK ─────────────────────────────────────────────────────
+    async function loadInk() {
+      const printer = document.getElementById('inkPrinterSel')?.value || 'L5290';
+      try {
+        const r = await fetch(`${API}/ink?printer=${printer}`);
+        const d = await r.json();
+        const grid = document.getElementById('inkBigGrid');
+        const warn = document.getElementById('inkWarn');
+
+        if (!d.ink || d.ink.length === 0) {
+          grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted);font-family:var(--mono)">Cannot read ink levels from ' + printer + '</div>';
+          return;
+        }
+
+        let warnMsgs = [];
+        grid.innerHTML = d.ink.map(ink => {
+          if (ink.critical) warnMsgs.push(`${ink.name} ink is CRITICALLY LOW (${ink.level}%)`);
+          else if (ink.low) warnMsgs.push(`${ink.name} ink is low (${ink.level}%)`);
+
+          return `
+        <div class="ink-big-card">
+          <div class="ink-tube">
+            <div class="ink-fill" style="height:${ink.level}%;background:${ink.color}20;border-top:3px solid ${ink.color}"></div>
+          </div>
+          <span class="ink-pct-big" style="color:${ink.critical ? 'var(--red)' : ink.low ? 'var(--yellow)' : ink.color}">${ink.level}%</span>
+          <span class="ink-name-big">${ink.name}</span>
+        </div>
+      `;
+        }).join('');
+
+        if (warnMsgs.length > 0) {
+          warn.classList.add('show');
+          document.getElementById('inkWarnMsg').textContent = '⚠️ ' + warnMsgs.join(' · ');
+        } else {
+          warn.classList.remove('show');
+        }
+      } catch (e) { }
+    }
+
+    // ── HISTORY ─────────────────────────────────────────────────
+    async function loadHistory() {
+      lastHistoryCount = 0;
+      const list = document.getElementById('historyList');
+      list.innerHTML = '';
+      await loadHistorySmooth();
+    }
+
+    // ── SETTINGS UI ──────────────────────────────────────────────
+    async function loadSettingsUI() {
+      try {
+        const r = await fetch(`${API}/settings`);
+        const d = await r.json();
+        document.getElementById('settDefaultPrinter').value = d.default_printer || 'L5290';
+        document.getElementById('settMedia').value = d.media || 'Letter';
+        const toggle = document.getElementById('settAutoReverse');
+        toggle.className = 'toggle ' + (d.auto_reverse ? 'on' : '');
+      } catch (e) { }
+    }
+
+    function toggleSetting(key, el) {
+      el.classList.toggle('on');
+    }
+
+    async function saveSettings() {
+      const data = {
+        default_printer: document.getElementById('settDefaultPrinter').value,
+        media: document.getElementById('settMedia').value,
+        auto_reverse: document.getElementById('settAutoReverse').classList.contains('on')
+      };
+      try {
+        await fetch(`${API}/settings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        showToast('✅ Settings saved!', 'success');
+      } catch (e) { showToast('❌ Server offline', 'error'); }
+    }
+
+    // ── SSE STREAM ───────────────────────────────────────────────
+    let lastStatus = null;
+    let lastHistoryCount = 0;
+    let wasRunning = false;
+
+    function startStream() {
+      try {
+        if (streamSource) streamSource.close();
+        streamSource = new EventSource(`${API}/stream`);
+        streamSource.onmessage = (e) => {
+          try {
+            const d = JSON.parse(e.data);
+            updateStatus(d);
+          } catch (err) { }
+        };
+        streamSource.onerror = () => {
+          streamSource.close();
+          streamSource = null;
+          setTimeout(startStream, 5000);
+        };
+      } catch (e) { }
+    }
+
+    function updateStatus(d) {
+      // Only update DOM if something actually changed
+      const statusKey = `${d.running}|${d.status}|${d.message}|${d.progress}|${d.copy}`;
+      if (statusKey === lastStatus) return;
+      lastStatus = statusKey;
+
+      // Icon
+      const icon = d.running ? '⏳' : (d.status === 'done' ? '✅' : d.status === 'error' ? '❌' : d.status === 'cancelled' ? '🚫' : '🖨️');
+      document.getElementById('statusIcon').textContent = icon;
+      document.getElementById('statusMsg').textContent = d.message || 'Ready to print';
+
+      // Progress bar
+      const prog = d.total > 0 ? (d.progress / d.total) * 100 : 0;
+      document.getElementById('progressFill').style.width = (d.running ? Math.max(prog, 5) : (d.status === 'done' ? 100 : 0)) + '%';
+
+      // Copy dots
+      if (d.copies > 1) updateCopyDots(d.copies, d.copy - 1);
+
+      // Detect transition from running → done
+      if (wasRunning && !d.running) {
+        document.getElementById('printBtn').disabled = false;
+
+        if (d.status === 'done') {
+          showToast('🎉 Print job complete!', 'success');
+          // Fade progress bar out after 2 seconds
+          setTimeout(() => {
+            document.getElementById('progressFill').style.width = '0%';
+          }, 2000);
+        } else if (d.status === 'error') {
+          showToast('❌ Print job failed!', 'error');
+        }
+
+        // Reload history only once when job finishes
+        loadHistorySmooth();
+      }
+
+      wasRunning = d.running;
+    }
+
+    // ── HISTORY (no flicker version) ────────────────────────────
+    async function loadHistorySmooth() {
+      try {
+        const r = await fetch(`${API}/history`);
+        const d = await r.json();
+        const list = document.getElementById('historyList');
+        const items = d.history || [];
+
+        // Skip if nothing changed
+        if (items.length === lastHistoryCount && lastHistoryCount > 0) return;
+        lastHistoryCount = items.length;
+
+        if (items.length === 0) {
+          list.innerHTML = '<div class="empty-state"><span class="e-icon">📭</span>No print jobs yet</div>';
+          return;
+        }
+
+        const icons = { done: '✅', error: '❌', queued: '⏳', warn: '⚠️' };
+
+        // Add only NEW items at top without re-rendering all
+        const existingIds = new Set(
+          [...list.querySelectorAll('.history-item')].map(el => el.dataset.id)
+        );
+
+        const newItems = items.filter(j => !existingIds.has(String(j.id)));
+
+        if (newItems.length > 0) {
+          newItems.forEach(j => {
+            const el = document.createElement('div');
+            el.className = 'history-item';
+            el.dataset.id = j.id;
+            el.innerHTML = `
+          <div class="h-icon">${icons[j.status] || '📄'}</div>
+          <div class="h-info">
+            <div class="h-action">${j.action}</div>
+            <div class="h-details">${j.details}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+            <div class="h-time">${j.time}</div>
+            <div class="h-badge ${j.status}">${j.status}</div>
+          </div>
+        `;
+            // Prepend new items at top
+            list.insertBefore(el, list.firstChild);
+          });
+
+          // Remove empty state if present
+          const empty = list.querySelector('.empty-state');
+          if (empty) empty.remove();
+        }
+      } catch (e) { }
+    }
+
+    // ── TOAST ────────────────────────────────────────────────────
+    function showToast(msg, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = msg;
+      container.appendChild(toast);
+      requestAnimationFrame(() => toast.classList.add('show'));
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    init();
+  </script>
+</body>
+
+</html>

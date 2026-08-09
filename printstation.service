@@ -1,0 +1,16 @@
+[Unit]
+Description=PrintStation - Local Print Management Dashboard
+After=network.target cups.service
+
+[Service]
+Type=simple
+# Replace YOUR_USERNAME with your actual Linux username
+User=YOUR_USERNAME
+WorkingDirectory=/home/YOUR_USERNAME/.printstation
+ExecStart=/usr/bin/python3 /home/YOUR_USERNAME/.printstation/app.py
+Restart=on-failure
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
